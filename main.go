@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -26,6 +28,7 @@ func main() {
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbHost := os.Getenv("DB_HOST")
 	dbPort := os.Getenv("DB_PORT")
+	tempSecret := os.Getenv("TEMP_SECRET")
 	dsn := fmt.Sprintf("postgresql://%s:%s@%s:%s/defaultdb?sslmode=verify-full", dbUser, dbPassword, dbHost, dbPort)
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 
@@ -37,6 +40,17 @@ func main() {
 
 	r := gin.Default()
 	r.Use(cors.Default())
+	r.Use(func(c *gin.Context) {
+		bearerToken := c.Request.Header.Get("Authorization")
+		if len(strings.Split(bearerToken, " ")) == 2 {
+			token := strings.Split(bearerToken, " ")[1]
+			if token == tempSecret {
+				c.Next()
+				return
+			}
+		}
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"message": "Invalid Bearer Token!"})
+	})
 
 	r.GET("/movies", handlers.GetAllMovies(db))
 	r.POST("/movies", handlers.CreateNewMovie(db))
